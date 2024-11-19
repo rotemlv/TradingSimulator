@@ -1,6 +1,7 @@
 import sys
 from functools import wraps
 
+import yfinance
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QRegExp
 from PyQt5.QtGui import QRegExpValidator
@@ -14,15 +15,18 @@ HEIGHT = 340
 
 
 # TODO:
-# - add revenue in main page
-# - add "net worth" in main page
+# - add revenue in main page (V)
+# - add "net worth" in main page (V)
 # - conduct tests for edge cases
+# - automate save-file name generation according to username.
+# - create settings for user to allow overwriting current profile on exit (etc)
+
 
 def update_gui_info(func):
     @wraps(func)
     def wrapper(self, *args, **kwargs):
         result = func(self, *args, **kwargs)
-        self.update_balance()
+        self.update_finance()
         self.update_trades()
         self.update_available_stocks()
         return result
@@ -148,6 +152,12 @@ class MainWindow(QMainWindow):
 
         self.balance_label = QLabel("Balance: $0.00")
         profile_layout.addWidget(self.balance_label)
+
+        self.revenue_label = QLabel("Revenue: $0.00")
+        profile_layout.addWidget(self.revenue_label)
+
+        self.net_worth_label = QLabel("Net worth: $0.00")
+        profile_layout.addWidget(self.net_worth_label)
 
         return profile_tab
 
@@ -397,11 +407,23 @@ class MainWindow(QMainWindow):
         else:
             QMessageBox.warning(self, "Warning", "No active profile.")
 
-    def update_balance(self):
+    def update_finance(self):
         if self.trader:
             try:
                 balance = self.trader.balance
                 self.balance_label.setText(f"Balance: ${balance:.2f}")
+                stock_value = 0
+                for stock_name, amount in self.trader.owned.items():
+                    price = float(yfinance.Ticker(stock_name).get_info()['currentPrice'])
+                    stock_value += price * amount
+                revenue = 0
+                for trade in self.trader.trades:
+                    if trade.amount < 0:
+                        revenue -= trade.amount * trade.share_value
+                net_worth = balance + stock_value
+                self.net_worth_label.setText(f"Net worth: ${net_worth:.2f}")
+                self.revenue_label.setText(f"Revenue : ${revenue:.2f}")
+
             except Exception as e:
                 QMessageBox.critical(self, "Error", str(e))
 
